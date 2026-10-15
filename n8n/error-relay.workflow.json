@@ -1,0 +1,237 @@
+{
+ "name": "[UTIL] Error Relay → Diagnosis Routine",
+ "nodes": [
+  {
+   "id": "b166079f-08a9-4b3d-b806-0872f0e8a70e",
+   "name": "Error Trigger",
+   "type": "n8n-nodes-base.errorTrigger",
+   "typeVersion": 1,
+   "position": [
+    0,
+    0
+   ],
+   "parameters": {}
+  },
+  {
+   "id": "52095ce6-1be7-4e09-8971-e6d9dd23f92f",
+   "name": "Extract, fingerprint, dedupe",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    240,
+    0
+   ],
+   "parameters": {
+    "jsCode": "// n8n Error Relay: keep only what the diagnosis routine needs, dedupe, and cap daily fires.\n// The fingerprint must match scripts/n8n_api.py fingerprint() exactly.\nconst DEDUPE_HOURS = 24;     // same issue fires the routine at most once per window\nconst MAX_FIRES_PER_DAY = 20; // stay under the routine plan's daily run cap\n\nconst e = $input.first().json;\nconst ex = e.execution || {};\nconst wf = e.workflow || {};\nconst trig = e.trigger || null;            // poll/trigger failures have no execution\nconst err = ex.error || (trig && trig.error) || {};\nconst node = ex.lastNodeExecuted || (err.node && err.node.name) || (trig ? 'trigger' : 'unknown');\nconst message = String(err.message || '');\n\nfunction normalise(m) {\n  let s = (m || '').toLowerCase().replace(/[0-9a-f]{8,}|\\d+/g, '#');\n  s = s.replace(/\"[^\"]{0,80}\"/g, '\"…\"');\n  return Array.from(s).slice(0, 160).join('');\n}\nfunction utf8(str) {\n  if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(str);\n  return Buffer.from(str, 'utf8');\n}\nfunction fnv1a(str, seed) {\n  let h = seed >>> 0;\n  for (const b of utf8(str)) { h ^= b; h = Math.imul(h, 0x01000193) >>> 0; }\n  return h.toString(16).padStart(8, '0');\n}\nconst key = `${wf.id}|${node}|${normalise(message)}`;\nconst fingerprint = (fnv1a(key, 0x811C9DC5) + fnv1a(key, 0x01000193)).slice(0, 12);\n\nconst sd = $getWorkflowStaticData('global');\nsd.seen = sd.seen || {};\nsd.suppressed = sd.suppressed || {};\nconst now = Date.now();\nconst today = new Date().toISOString().slice(0, 10);\nif (sd.day !== today) { sd.day = today; sd.fires = 0; }\nfor (const [fp, t] of Object.entries(sd.seen)) {          // forget old fingerprints\n  if (now - t > 7 * 24 * 3600e3) { delete sd.seen[fp]; delete sd.suppressed[fp]; }\n}\n\nlet action = 'fire';\nif (sd.seen[fingerprint] && now - sd.seen[fingerprint] < DEDUPE_HOURS * 3600e3) action = 'suppress';\nelse if (sd.fires >= MAX_FIRES_PER_DAY) action = 'cap';\n\nconst payload = {\n  executionId: ex.id || null,\n  runUrl: ex.url || null,\n  workflowId: wf.id,\n  workflowName: wf.name,\n  node,\n  message: message.slice(0, 500),\n  description: String(err.description || (err.messages || [])[0] || '').slice(0, 500),\n  httpCode: err.httpCode || null,\n  mode: ex.mode || (trig ? 'trigger' : null),\n  failedAt: (err.timestamp ? new Date(err.timestamp) : new Date()).toISOString(),\n  isTriggerFailure: !!trig && !ex.id,\n  fingerprint,\n  suppressedSinceLastReport: sd.suppressed[fingerprint] || 0,\n};\n\nif (action === 'fire') { sd.seen[fingerprint] = now; sd.fires += 1; sd.suppressed[fingerprint] = 0; }\nelse if (action === 'suppress') { sd.suppressed[fingerprint] = (sd.suppressed[fingerprint] || 0) + 1; }\n\nreturn [{ json: { action, fingerprint, payload, routineText: 'N8N_ERROR ' + JSON.stringify(payload) } }];\n"
+   }
+  },
+  {
+   "id": "c5ed3a98-d53c-4bea-9f1d-a96dc9595943",
+   "name": "Route by action",
+   "type": "n8n-nodes-base.switch",
+   "typeVersion": 3.2,
+   "position": [
+    480,
+    0
+   ],
+   "parameters": {
+    "rules": {
+     "values": [
+      {
+       "conditions": {
+        "options": {
+         "caseSensitive": true,
+         "typeValidation": "strict",
+         "version": 2
+        },
+        "combinator": "and",
+        "conditions": [
+         {
+          "leftValue": "={{ $json.action }}",
+          "rightValue": "fire",
+          "operator": {
+           "type": "string",
+           "operation": "equals"
+          }
+         }
+        ]
+       },
+       "renameOutput": true,
+       "outputKey": "fire"
+      },
+      {
+       "conditions": {
+        "options": {
+         "caseSensitive": true,
+         "typeValidation": "strict",
+         "version": 2
+        },
+        "combinator": "and",
+        "conditions": [
+         {
+          "leftValue": "={{ $json.action }}",
+          "rightValue": "cap",
+          "operator": {
+           "type": "string",
+           "operation": "equals"
+          }
+         }
+        ]
+       },
+       "renameOutput": true,
+       "outputKey": "daily cap reached"
+      }
+     ]
+    },
+    "options": {
+     "fallbackOutput": "extra",
+     "renameFallbackOutput": "suppressed repeat"
+    }
+   }
+  },
+  {
+   "id": "b0d036ef-7aa8-4f76-b733-c826191e8ed6",
+   "name": "Fire diagnosis routine",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    740,
+    -120
+   ],
+   "retryOnFail": true,
+   "maxTries": 3,
+   "waitBetweenTries": 3000,
+   "onError": "continueErrorOutput",
+   "parameters": {
+    "method": "POST",
+    "url": "https://api.anthropic.com/v1/claude_code/routines/REPLACE_WITH_ROUTINE_ID/fire",
+    "authentication": "genericCredentialType",
+    "genericAuthType": "httpHeaderAuth",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "anthropic-version",
+       "value": "2023-06-01"
+      }
+     ]
+    },
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ text: $json.routineText }) }}",
+    "options": {
+     "timeout": 20000
+    }
+   },
+   "credentials": {
+    "httpHeaderAuth": {
+     "id": "",
+     "name": "Diagnosis routine token"
+    }
+   }
+  },
+  {
+   "id": "d9e395fd-2491-4f63-848f-72f2a39ddd49",
+   "name": "Fallback Slack alert",
+   "type": "n8n-nodes-base.slack",
+   "typeVersion": 2.3,
+   "position": [
+    1000,
+    60
+   ],
+   "parameters": {
+    "authentication": "oAuth2",
+    "select": "channel",
+    "channelId": {
+     "__rl": true,
+     "value": "C097F70UCQ4",
+     "mode": "list",
+     "cachedResultName": "n8n_marketing_runs"
+    },
+    "text": "={{ (() => { const p = $('Extract, fingerprint, dedupe').item.json.payload; const a = $('Extract, fingerprint, dedupe').item.json.action; return `Error in ${p.workflowName} (node: ${p.node})\\n${p.message}\\n${p.description}\\n${p.runUrl || ''}\\n_${a === 'cap' ? 'Daily diagnosis cap reached, not diagnosed.' : 'Diagnosis routine could not be reached.'}_`; })() }}",
+    "otherOptions": {}
+   },
+   "credentials": {
+    "slackOAuth2Api": {
+     "id": "pwRsJWVARd20iV1W",
+     "name": "Slack (working)"
+    }
+   }
+  },
+  {
+   "id": "de1ebf91-7ec2-466a-a41e-f376818d6a6b",
+   "name": "Skip (already reported today)",
+   "type": "n8n-nodes-base.noOp",
+   "typeVersion": 1,
+   "position": [
+    740,
+    160
+   ],
+   "parameters": {}
+  }
+ ],
+ "connections": {
+  "Error Trigger": {
+   "main": [
+    [
+     {
+      "node": "Extract, fingerprint, dedupe",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Extract, fingerprint, dedupe": {
+   "main": [
+    [
+     {
+      "node": "Route by action",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Route by action": {
+   "main": [
+    [
+     {
+      "node": "Fire diagnosis routine",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Fallback Slack alert",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Skip (already reported today)",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Fire diagnosis routine": {
+   "main": [
+    [],
+    [
+     {
+      "node": "Fallback Slack alert",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1"
+ }
+}
