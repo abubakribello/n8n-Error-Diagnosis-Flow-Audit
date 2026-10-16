@@ -4,9 +4,9 @@ Env: NOTION_TOKEN (internal integration, shared with both databases),
      NOTION_ERRORS_DB (the "n8n Error Runs" database id),
      NOTION_AUDIT_PARENT (page id the audit reports are created under),
      NOTION_ASSIGNEE_ID (Notion user id; Owner of the review task),
-     NOTION_MENTION_IDS (comma-separated extra Notion user ids; also Owners of the review task
-       and @mentioned there and on audit reports). The Error Runs page itself tags nobody:
-       the review task links to it, so each person gets one notification per new issue.
+     NOTION_MENTION_IDS (comma-separated extra Notion user ids; also Owners of the review task).
+       Owners are notified by Notion, so the task has no @mentions and the Error Runs page tags
+       nobody. Only the audit report (a plain page, no Owner field) @mentions everyone.
      NOTION_TASKS_DB (optional: "Actions Business"; each NEW diagnosis also gets a short
        "New n8n error" task there that links the Error Runs page. Existing fields only:
        title, Do Date, Due Date, Owner, Priority. Repeats (bump) create no new task.)
@@ -225,7 +225,7 @@ def create_review_task(d, error_page):
     if mention_ids():
         wanted["Owner"] = {"people": [{"object": "user", "id": uid} for uid in mention_ids()]}
     props.update({k: v for k, v in wanted.items() if k in props_schema})
-    line = mentions() + [{"type": "text", "text": {"content": "review the diagnosis: "}},
+    line = [{"type": "text", "text": {"content": "Review the diagnosis: "}},
              {"type": "mention", "mention": {"page": {"id": error_page["id"]}}}]
     task = call("POST", "/pages", {"parent": {"database_id": tasks_db}, "properties": props, "children": [
         {"object": "block", "type": "paragraph", "paragraph": {"rich_text": line}},

@@ -193,22 +193,10 @@
        "text": {
         "text": [
          {
-          "text": "⚠️ New n8n error, not diagnosed automatically ",
+          "text": "⚠️ New n8n error, not diagnosed automatically",
           "annotationUi": {
            "bold": true
           }
-         },
-         {
-          "textType": "mention",
-          "mentionType": "user",
-          "user": "218d872b-594c-81f7-a5c1-0002db266243",
-          "annotationUi": {}
-         },
-         {
-          "textType": "mention",
-          "mentionType": "user",
-          "user": "f729131b-ead9-4ccb-942e-9ba46e45f232",
-          "annotationUi": {}
          }
         ]
        }

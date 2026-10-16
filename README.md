@@ -108,10 +108,10 @@ Always follow the SKILL.md from the repo, not from memory.
   firing once the setting points elsewhere.
 
 ## Who gets notified
-- **"New n8n error" task (Actions Business):** you and Johannes are both **Owners** and are @mentioned. It links the Error Runs page.
+- **"New n8n error" task (Actions Business):** you and Johannes are both **Owners**, which is what notifies you. There are no @mentions. It links the Error Runs page.
 - **Error Runs page:** tags nobody and has no Assignee, so there's no duplicate notification. Open it from the task.
-- **Audit report:** both @mentioned.
-- **Relay fallback task (not diagnosed):** both Owners and @mentioned.
+- **Audit report:** both @mentioned. It is a plain page with no Owner field, so the mention is the only notification.
+- **Relay fallback task (not diagnosed):** both Owners, no @mentions.
 - Repeats of an open issue only bump the counter on the Error Runs page, so nobody is notified again.
 
 `NOTION_ASSIGNEE_ID` plus every id in `NOTION_MENTION_IDS` count as owners.
