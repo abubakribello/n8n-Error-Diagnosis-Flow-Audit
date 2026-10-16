@@ -3,7 +3,9 @@
 Env: NOTION_TOKEN (internal integration, shared with both databases),
      NOTION_ERRORS_DB (the "n8n Error Runs" database id),
      NOTION_AUDIT_PARENT (page id the audit reports are created under),
-     NOTION_ASSIGNEE_ID (Notion user id to assign + @mention),
+     NOTION_ASSIGNEE_ID (Notion user id set as Owner/Assignee),
+     NOTION_MENTION_IDS (comma-separated Notion user ids @mentioned on every error page,
+       review task and audit report; the assignee is always mentioned too),
      NOTION_TASKS_DB (optional: "Actions Business"; each NEW diagnosis also gets a short
        "New n8n error" task there that links the Error Runs page. Existing fields only:
        title, Do Date, Due Date, Owner, Priority. Repeats (bump) create no new task.)
@@ -56,6 +58,23 @@ def call(method, path, body=None):
     out = json.loads(r.stdout or b"{}")
     if out.get("object") == "error":
         raise RuntimeError(f"Notion {method} {path}: {out.get('code')} {out.get('message')}")
+    return out
+
+
+def mention_ids():
+    ids = [os.environ.get("NOTION_ASSIGNEE_ID", "")] + os.environ.get("NOTION_MENTION_IDS", "").split(",")
+    seen = []
+    for i in (x.strip() for x in ids):
+        if i and i not in seen:
+            seen.append(i)
+    return seen
+
+
+def mentions():
+    """Rich-text @mentions; Notion notifies every mentioned person."""
+    out = []
+    for uid in mention_ids():
+        out += [{"type": "mention", "mention": {"user": {"id": uid}}}, {"type": "text", "text": {"content": " "}}]
     return out
 
 
@@ -167,8 +186,8 @@ def create_task(path):
     }
     if assignee:
         props["Assignee"] = {"people": [{"object": "user", "id": assignee}]}
-    intro = [{"type": "mention", "mention": {"user": {"id": assignee}}}] if assignee else []
-    intro += [{"type": "text", "text": {"content": f" {d['workflow_name']} failed at node \"{d['node']}\". "}}]
+    intro = mentions()
+    intro += [{"type": "text", "text": {"content": f"{d['workflow_name']} failed at node \"{d['node']}\". "}}]
     if d.get("run_url"):
         intro += [{"type": "text", "text": {"content": "Open the failed run", "link": {"url": d["run_url"]}}}]
     children = [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": intro}},
@@ -204,8 +223,7 @@ def create_review_task(d, error_page):
     if owner:
         wanted["Owner"] = {"people": [{"object": "user", "id": owner}]}
     props.update({k: v for k, v in wanted.items() if k in props_schema})
-    line = [{"type": "mention", "mention": {"user": {"id": owner}}}] if owner else []
-    line += [{"type": "text", "text": {"content": " review the diagnosis: "}},
+    line = mentions() + [{"type": "text", "text": {"content": "review the diagnosis: "}},
              {"type": "mention", "mention": {"page": {"id": error_page["id"]}}}]
     task = call("POST", "/pages", {"parent": {"database_id": tasks_db}, "properties": props, "children": [
         {"object": "block", "type": "paragraph", "paragraph": {"rich_text": line}},
@@ -228,11 +246,9 @@ def create_audit(md_path, title):
             blocks += bullets([s[2:]])
         else:
             blocks.append(para(s))
-    assignee = os.environ.get("NOTION_ASSIGNEE_ID")
-    if assignee:
-        blocks.insert(0, {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [
-            {"type": "mention", "mention": {"user": {"id": assignee}}},
-            {"type": "text", "text": {"content": " new n8n audit is ready."}}]}})
+    if mention_ids():
+        blocks.insert(0, {"object": "block", "type": "paragraph", "paragraph": {"rich_text":
+            mentions() + [{"type": "text", "text": {"content": "new n8n audit is ready."}}]}})
     page = call("POST", "/pages", {
         "parent": {"page_id": os.environ["NOTION_AUDIT_PARENT"]},
         "properties": {"title": {"title": text(title, 200)}},

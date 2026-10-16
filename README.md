@@ -63,7 +63,8 @@ At claude.ai/code, create an environment named `n8n-ops`.
   NOTION_TOKEN=<integration secret>
   NOTION_ERRORS_DB=2df9e268-c9cb-4145-b4f4-032c163106bf
   NOTION_AUDIT_PARENT=<page id of "n8n Audits">
-  NOTION_ASSIGNEE_ID=<your Notion user id>
+  NOTION_ASSIGNEE_ID=218d872b-594c-81f7-a5c1-0002db266243
+  NOTION_MENTION_IDS=f729131b-ead9-4ccb-942e-9ba46e45f232
   NOTION_TASKS_DB=17db87a2-2ecb-809d-a874-cac800476f67
   ```
 
@@ -105,6 +106,11 @@ Always follow the SKILL.md from the repo, not from memory.
   ```
   Delete the write key afterwards. The old Error Trigger branches can be removed later. They stop
   firing once the setting points elsewhere.
+
+## Who gets notified
+The Owner (`NOTION_ASSIGNEE_ID`) and everyone in `NOTION_MENTION_IDS` are @mentioned on every new
+Error Runs page, every "New n8n error" task, every audit report and every relay fallback task.
+Repeats of an open issue only bump its counter, so nobody is notified again.
 
 ## Limits and behaviour
 - Errors only reach the relay from production runs (webhook, trigger, schedule), not from manual test runs.
