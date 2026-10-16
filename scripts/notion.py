@@ -18,7 +18,7 @@ CLI:
   python3 notion.py create-task <diagnosis.json>  # -> page url
   python3 notion.py create-audit <audit.md> <title>
 """
-import json, os, sys, subprocess, datetime
+import json, os, re, sys, subprocess, datetime
 
 API = "https://api.notion.com/v1"
 VERSION = "2022-06-28"
@@ -78,8 +78,14 @@ def mentions():
     return out
 
 
+def notion_id(raw):
+    """Accept a bare id, a hyphenated uuid, a page slug or a full Notion URL."""
+    found = re.findall(r"[0-9a-f]{32}", (raw or "").lower().replace("-", ""))
+    return found[-1] if found else raw
+
+
 def db_id():
-    return os.environ["NOTION_ERRORS_DB"]
+    return notion_id(os.environ["NOTION_ERRORS_DB"])
 
 
 def text(s, limit=1900):
@@ -212,7 +218,7 @@ PRIORITY = {"high": "🔥❗️", "medium": "1st Priority 🚀", "low": "1st Pri
 def create_review_task(d, error_page):
     """Short task in Actions Business so the owner gets a Notion notification.
     Writes only properties that already exist there; never changes its schema."""
-    tasks_db = os.environ["NOTION_TASKS_DB"]
+    tasks_db = notion_id(os.environ["NOTION_TASKS_DB"])
     owner = os.environ.get("NOTION_ASSIGNEE_ID")
     props_schema = call("GET", f"/databases/{tasks_db}")["properties"]
     title_key = next(k for k, v in props_schema.items() if v["type"] == "title")
@@ -250,7 +256,7 @@ def create_audit(md_path, title):
         blocks.insert(0, {"object": "block", "type": "paragraph", "paragraph": {"rich_text":
             mentions() + [{"type": "text", "text": {"content": "new n8n audit is ready."}}]}})
     page = call("POST", "/pages", {
-        "parent": {"page_id": os.environ["NOTION_AUDIT_PARENT"]},
+        "parent": {"page_id": notion_id(os.environ["NOTION_AUDIT_PARENT"])},
         "properties": {"title": {"title": text(title, 200)}},
         "children": blocks[:100]})  # Notion accepts 100 blocks per request
     for i in range(100, len(blocks), 100):
