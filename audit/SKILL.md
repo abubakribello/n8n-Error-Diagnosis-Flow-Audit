@@ -20,6 +20,8 @@ description: Scheduled recon of all published n8n workflows (usage, errors, hidd
    *upgrade* (models/nodes), *retire* (`unused: true`, i.e. no runs in the window and not called
    by another workflow; say "unpublish or archive").
    Use the error `issues` (already grouped by fingerprint) for the recurring-error section.
+   Any workflow with `legacy_error_branch_runs > 0` still runs its old Error Trigger branch
+   (duplicate alerts next to the relay): list it under Security with "delete the old branch".
 
 4. **Compare with the last audit.** Find the most recent page titled "n8n Audit" under
    `NOTION_AUDIT_PARENT` (Notion search) and list: fixed since last time, new, still open.

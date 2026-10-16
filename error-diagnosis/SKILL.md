@@ -74,10 +74,17 @@ Target: Notion task within ~3 minutes of firing. Do not explore beyond what the 
    `NOTION_MENTION_IDS= python3 scripts/notion.py create-task diagnosis.json`, so only the main
    owner gets the task.
 
-8. If node parameters in `ctx.json` show `<SECRET>` inside a literal header/URL, append to
+8. **Old error branch check:** if `ctx.json` → `old_error_branch.fired` is true, the workflow's
+   legacy Error Trigger branch ran as well as the relay (duplicate alerts). Add to `evidence`
+   "Old in-workflow error branch also ran (executions …)" and to `fix_steps`
+   "Delete the old Error Trigger branch in <workflow>; the relay now handles its errors".
+   If `has_legacy_error_trigger` is true and `fired` is false, add to `evidence`
+   "Old error branch stayed silent (relay only)".
+
+9. If node parameters in `ctx.json` show `<SECRET>` inside a literal header/URL, append to
    `fix_steps`: "Move the secret in node X into an n8n credential" (never the value).
 
-9. Final message: both Notion URLs (Error Runs page and the Actions Business task) and the one-line cause.
+10. Final message: whether the old error branch fired (yes/no/none present), both Notion URLs (Error Runs page and the Actions Business task) and the one-line cause.
 
 ## Rules
 - Read-only against n8n: never edit, retry, activate or deactivate anything.

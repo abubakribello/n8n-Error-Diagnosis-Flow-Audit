@@ -66,13 +66,17 @@ def static_checks(w):
     }
 
 
-def runs_since(workflow_id, status, since):
-    """Count runs (no data) newest-first until older than `since`."""
+def runs_since(workflow_id, status, since, legacy=None):
+    """Count runs (no data) newest-first until older than `since`.
+    `legacy` (a list) collects runs in mode "error": the workflow's own old Error Trigger branch."""
     count, last = 0, None
     for e in paged(f"/executions?workflowId={workflow_id}&status={status}", limit=100, max_pages=20):
         started = e.get("startedAt") or e.get("createdAt") or ""
         if started and started < since:
             break
+        if e.get("mode") == "error" and legacy is not None:
+            legacy.append(e["id"])
+            continue
         count += 1
         last = last or started
     return count, last
@@ -128,11 +132,13 @@ def main():
     for w in workflows:
         s = static_checks(w)
         called |= set(s["calls_workflows"])
-        ok, last_ok = runs_since(w["id"], "success", since)
-        err, last_err = runs_since(w["id"], "error", since)
+        legacy = []
+        ok, last_ok = runs_since(w["id"], "success", since, legacy)
+        err, last_err = runs_since(w["id"], "error", since, legacy)
         entry = {"id": w["id"], "name": w["name"], "updatedAt": w.get("updatedAt"),
                  "runs_success": ok, "runs_error": err, "last_success": last_ok, "last_error": last_err,
-                 "error_rate": round(err / (ok + err), 3) if ok + err else None, **s}
+                 "error_rate": round(err / (ok + err), 3) if ok + err else None,
+                 "legacy_error_branch_runs": len(legacy), **s}
         if err:
             entry["errors"] = errors_with_data(w["id"], since)
             groups = collections.defaultdict(list)
@@ -156,6 +162,7 @@ def main():
         "hardcoded_secret_nodes": sum(len(e["hardcoded_secret_nodes"]) for e in report["workflows"]),
         "open_webhooks": sum(len(e["open_webhooks"]) for e in report["workflows"]),
         "no_error_handling": sum(not e["has_error_handling"] for e in report["workflows"]),
+        "legacy_error_branch_runs": sum(e["legacy_error_branch_runs"] for e in report["workflows"]),
         "silent_failure_items": sum(sum(e.get("silent_failures", {}).get("errors_by_node", {}).values()) for e in report["workflows"]),
         "models_in_use": dict(collections.Counter(m for e in report["workflows"] for m in e["models"])),
     }

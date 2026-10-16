@@ -75,6 +75,27 @@ def referenced_nodes(run_data, node):
         out[name] = {"item_count": len(flat), "first_item": flat[0] if flat else None}
     return out
 
+def old_error_branch(wf, ex):
+    """Did the workflow's own (legacy) Error Trigger branch also run for this failure?
+    n8n runs it as an execution of the same workflow in mode "error". With the relay set
+    as error workflow it should stay silent; if it ran, the user gets duplicate alerts."""
+    has_trigger = any("errorTrigger" in n["type"] for n in wf["nodes"])
+    if not has_trigger:
+        return {"has_legacy_error_trigger": False, "fired": False}
+    started = ex.get("startedAt") or ""
+    recent = get(f"/executions?workflowId={wf['id']}&limit=25").get("data", [])
+    import datetime
+    t0 = datetime.datetime.fromisoformat(started.replace("Z", "+00:00")) if started else None
+    def within(e, minutes=5):  # the legacy branch runs right after the failure, not later
+        if not t0 or not e.get("startedAt"):
+            return False
+        t = datetime.datetime.fromisoformat(e["startedAt"].replace("Z", "+00:00"))
+        return datetime.timedelta(0) <= t - t0 <= datetime.timedelta(minutes=minutes)
+    runs = [e["id"] for e in recent if e.get("mode") == "error" and within(e)]
+    return {"has_legacy_error_trigger": True, "fired": bool(runs), "executions": runs,
+            "error_workflow_setting": (wf.get("settings") or {}).get("errorWorkflow")}
+
+
 def main(exec_id):
     ex = get(f"/executions/{exec_id}?includeData=true")
     wf = get(f"/workflows/{ex['workflowId']}")
@@ -112,6 +133,7 @@ def main(exec_id):
         "last_successful_run_of_node": last_ok,
     }
     ctx["referenced_nodes_this_run"] = referenced_nodes(run_data, node)
+    ctx["old_error_branch"] = old_error_branch(wf, ex)
     path = ctx["workflow"].pop("path_taken")
     ctx = trim(redact(ctx))
     ctx["workflow"]["path_taken"] = path  # keep full path untrimmed
