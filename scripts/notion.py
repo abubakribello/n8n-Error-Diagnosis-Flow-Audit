@@ -258,6 +258,29 @@ def create_audit(md_path, title):
     for i in range(100, len(blocks), 100):
         call("PATCH", f"/blocks/{page['id']}/children", {"children": blocks[i:i + 100]})
     print(page["url"])
+    if os.environ.get("NOTION_TASKS_DB"):
+        print(create_audit_task(title, page))
+
+
+def create_audit_task(title, audit_page):
+    """'Review <audit title>' task in Actions Business, owned by NOTION_ASSIGNEE_ID only."""
+    tasks_db = notion_id(os.environ["NOTION_TASKS_DB"])
+    owner = os.environ.get("NOTION_ASSIGNEE_ID")
+    schema = call("GET", f"/databases/{tasks_db}")["properties"]
+    title_key = next(k for k, v in schema.items() if v["type"] == "title")
+    today = datetime.date.today()
+    wanted = {"Do Date": {"date": {"start": today.isoformat()}},
+              "Due Date": {"date": {"start": (today + datetime.timedelta(days=3)).isoformat()}},
+              "Priority": {"select": {"name": "1st Priority 🚀"}}}
+    if owner:
+        wanted["Owner"] = {"people": [{"object": "user", "id": owner}]}
+    props = {title_key: {"title": text(f"Review {title}", 200)}}
+    props.update({k: v for k, v in wanted.items() if k in schema})
+    task = call("POST", "/pages", {"parent": {"database_id": tasks_db}, "properties": props, "children": [
+        {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [
+            {"type": "text", "text": {"content": "Go through the audit report and pick what to act on: "}},
+            {"type": "mention", "mention": {"page": {"id": audit_page["id"]}}}]}}]})
+    return task["url"]
 
 
 if __name__ == "__main__":

@@ -56,6 +56,7 @@ const payload = {
   isTriggerFailure: !!trig && !ex.id,
   fingerprint,
   suppressedSinceLastReport: sd.suppressed[fingerprint] || 0,
+  test: String(wf.name || '').startsWith('[TEST]'),  // test runs: only the main owner is tagged
 };
 
 if (action === 'fire') { sd.seen[fingerprint] = now; sd.fires += 1; sd.suppressed[fingerprint] = 0; }

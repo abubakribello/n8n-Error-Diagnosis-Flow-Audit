@@ -42,7 +42,8 @@ description: Scheduled recon of all published n8n workflows (usage, errors, hidd
    ```
    Then `python3 scripts/notion.py create-audit audit.md "n8n Audit YYYY-MM-DD"`.
 
-6. Final message: the Notion URL and the top 3 actions.
+6. Final message: the Notion URL of the report, the URL of the "Review n8n Audit …" task that
+   `create-audit` also creates in Actions Business, and the top 3 actions.
 
 ## Rules
 - Read-only against n8n.

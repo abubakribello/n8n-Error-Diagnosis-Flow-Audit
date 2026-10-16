@@ -69,6 +69,10 @@ Target: Notion task within ~3 minutes of firing. Do not explore beyond what the 
     "prevention": "", "assumption": "", "occurrences": 1, "patched_node": null}
    ```
    Set `occurrences` to `1 + suppressedSinceLastReport`.
+   **Test mode:** if the payload has `"test": true` (the relay sets it for workflows named
+   `[TEST] …`), prefix `title` with `[TEST] ` and run
+   `NOTION_MENTION_IDS= python3 scripts/notion.py create-task diagnosis.json`, so only the main
+   owner gets the task.
 
 8. If node parameters in `ctx.json` show `<SECRET>` inside a literal header/URL, append to
    `fix_steps`: "Move the secret in node X into an n8n credential" (never the value).
