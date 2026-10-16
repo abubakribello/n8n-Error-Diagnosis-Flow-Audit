@@ -2,14 +2,16 @@
 
 Two Claude Code routines for the DigitalXShift n8n instance (jkdxs.app.n8n.cloud):
 
-1. **Error diagnosis**: a workflow fails, the n8n relay fires the routine, and the routine writes a
-   Notion task that assigns and @mentions you. The task has the error, root cause, evidence, fix,
+1. **Error diagnosis**: a workflow fails, the n8n relay fires the routine, and the routine writes the
+   diagnosis to **n8n Error Runs**. It then creates a short "New n8n error" task in **Actions Business** that links
+   that page and has you as Owner, so you get the notification. The task has the error, root cause, evidence, fix,
    a paste-ready fixed node and the run link. It usually takes a few minutes.
 2. **Flow audit**: on the 1st and 15th of each month, a recon of every published workflow
    ends as one Notion report with prioritized recommendations.
 
 ```
-workflow fails ─► [UTIL] Error Relay (n8n) ─► routine /fire ─► error-diagnosis/SKILL.md ─► Notion task (@you)
+workflow fails ─► [UTIL] Error Relay (n8n) ─► routine /fire ─► error-diagnosis/SKILL.md ─► n8n Error Runs page
+                                                                                          + "New n8n error" task in Actions Business (Owner you)
                    fingerprint, 24 h dedupe,                    build_context.py (masked)
                    20 fires/day cap, Notion fallback            notion.py create-task / bump
 
@@ -37,7 +39,9 @@ Both routines are read-only against n8n. Only Notion is written to.
 ### 1. Notion
 1. Create an internal integration at notion.so/profile/integrations. Turn on the capabilities
    *Read content*, *Update content*, *Insert content* and *Read user information including email*.
-2. Share the **n8n Error Runs** database and an **n8n Audits** parent page with the integration.
+2. Share the **n8n Error Runs** database, the **Actions Business** database and an **n8n Audits**
+   parent page with the integration. Actions Business is only written to (a short "New n8n error" task
+   per new issue, using its existing fields). Its schema is never changed.
 3. Locally, once:
    ```bash
    export NOTION_TOKEN=secret_... NOTION_ERRORS_DB=2df9e268-c9cb-4145-b4f4-032c163106bf
@@ -60,6 +64,7 @@ At claude.ai/code, create an environment named `n8n-ops`.
   NOTION_ERRORS_DB=2df9e268-c9cb-4145-b4f4-032c163106bf
   NOTION_AUDIT_PARENT=<page id of "n8n Audits">
   NOTION_ASSIGNEE_ID=<your Notion user id>
+  NOTION_TASKS_DB=17db87a2-2ecb-809d-a874-cac800476f67
   ```
 
 ### 4. Routine: n8n Error Diagnosis (API trigger)

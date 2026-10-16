@@ -3,7 +3,10 @@
 Env: NOTION_TOKEN (internal integration, shared with both databases),
      NOTION_ERRORS_DB (the "n8n Error Runs" database id),
      NOTION_AUDIT_PARENT (page id the audit reports are created under),
-     NOTION_ASSIGNEE_ID (Notion user id to assign + @mention).
+     NOTION_ASSIGNEE_ID (Notion user id to assign + @mention),
+     NOTION_TASKS_DB (optional: "Actions Business"; each NEW diagnosis also gets a short
+       "New n8n error" task there that links the Error Runs page. Existing fields only:
+       title, Do Date, Due Date, Owner, Priority. Repeats (bump) create no new task.)
 
 CLI:
   python3 notion.py ensure-schema                 # add missing properties (idempotent)
@@ -179,6 +182,35 @@ def create_task(path):
     page = call("POST", "/pages", {"parent": {"database_id": db_id()}, "properties": props,
                                    "children": children})
     print(page["url"])
+    if os.environ.get("NOTION_TASKS_DB"):
+        print(create_review_task(d, page))
+
+
+# Actions Business uses these two priority options today; high severity gets the urgent one.
+PRIORITY = {"high": "🔥❗️", "medium": "1st Priority 🚀", "low": "1st Priority 🚀"}
+
+
+def create_review_task(d, error_page):
+    """Short task in Actions Business so the owner gets a Notion notification.
+    Writes only properties that already exist there; never changes its schema."""
+    tasks_db = os.environ["NOTION_TASKS_DB"]
+    owner = os.environ.get("NOTION_ASSIGNEE_ID")
+    props_schema = call("GET", f"/databases/{tasks_db}")["properties"]
+    title_key = next(k for k, v in props_schema.items() if v["type"] == "title")
+    today = datetime.date.today().isoformat()
+    props = {title_key: {"title": text(f"New n8n error: {d['workflow_name']} → {d['node']}", 200)}}
+    wanted = {"Do Date": {"date": {"start": today}}, "Due Date": {"date": {"start": today}},
+              "Priority": {"select": {"name": PRIORITY.get(d["severity"], "1st Priority 🚀")}}}
+    if owner:
+        wanted["Owner"] = {"people": [{"object": "user", "id": owner}]}
+    props.update({k: v for k, v in wanted.items() if k in props_schema})
+    line = [{"type": "mention", "mention": {"user": {"id": owner}}}] if owner else []
+    line += [{"type": "text", "text": {"content": " review the diagnosis: "}},
+             {"type": "mention", "mention": {"page": {"id": error_page["id"]}}}]
+    task = call("POST", "/pages", {"parent": {"database_id": tasks_db}, "properties": props, "children": [
+        {"object": "block", "type": "paragraph", "paragraph": {"rich_text": line}},
+        para(f"{d['title']} (severity {d['severity']}, confidence {d['confidence']}, status {d['status']})")]})
+    return task["url"]
 
 
 def create_audit(md_path, title):

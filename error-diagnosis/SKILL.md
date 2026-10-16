@@ -1,6 +1,6 @@
 ---
 name: n8n-error-diagnosis
-description: Fired by the n8n Error Relay for each new failing issue. Diagnoses the failed execution read-only and writes one Notion task (error, root cause, evidence, fix, run link) assigned to and mentioning the owner.
+description: Fired by the n8n Error Relay for each new failing issue. Diagnoses the failed execution read-only, writes the diagnosis to n8n Error Runs and a linked "New n8n error" review task in Actions Business.
 ---
 
 # n8n Error Diagnosis (routine)
@@ -73,7 +73,7 @@ Target: Notion task within ~3 minutes of firing. Do not explore beyond what the 
 8. If node parameters in `ctx.json` show `<SECRET>` inside a literal header/URL, append to
    `fix_steps`: "Move the secret in node X into an n8n credential" (never the value).
 
-9. Final message: the Notion URL and the one-line cause.
+9. Final message: both Notion URLs (Error Runs page and the Actions Business task) and the one-line cause.
 
 ## Rules
 - Read-only against n8n: never edit, retry, activate or deactivate anything.
