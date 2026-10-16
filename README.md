@@ -46,7 +46,7 @@ Both routines are read-only against n8n. Only Notion is written to.
    ```
 
 ### 2. GitHub
-Create a private repo `abubakribello/n8n-ops-routines` and push this folder.
+Create a private repo `abubakribello/n8n-Error-Diagnosis-Flow-Audit` and push this folder.
 
 ### 3. Claude environment
 At claude.ai/code, create an environment named `n8n-ops`.
@@ -63,7 +63,7 @@ At claude.ai/code, create an environment named `n8n-ops`.
   ```
 
 ### 4. Routine: n8n Error Diagnosis (API trigger)
-New routine → repo `n8n-ops-routines`, environment `n8n-ops`, model Sonnet, trigger **API**. Prompt:
+New routine → repo `n8n-Error-Diagnosis-Flow-Audit`, environment `n8n-ops`, model Sonnet, trigger **API**. Prompt:
 ```
 You diagnose failed n8n workflow runs. Read and follow error-diagnosis/SKILL.md in this
 repo exactly, using the incoming trigger text (it starts with "N8N_ERROR ") as the input.
