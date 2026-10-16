@@ -41,6 +41,7 @@ def main():
     backup.mkdir()
     q = "/workflows?active=true&limit=250" + (f"&projectId={project}" if project else "")
     changed = 0
+    failed = []
     for w in api("GET", q)["data"]:
         if w["id"] == relay or (only and w["id"] not in only):
             continue
@@ -58,17 +59,25 @@ def main():
                     "staticData": w.get("staticData")}
             try:
                 api("PUT", f"/workflows/{w['id']}", body)
-            except RuntimeError:
-                body["settings"] = {k: v for k, v in body["settings"].items() if k in ALLOWED_SETTINGS}
-                print(f"    retried with documented settings only (dropped: "
-                      f"{sorted(set(w.get('settings') or {}) - ALLOWED_SETTINGS)})")
-                api("PUT", f"/workflows/{w['id']}", body)
+            except RuntimeError as first:
+                extra = sorted(set(w.get("settings") or {}) - ALLOWED_SETTINGS)
+                if extra:  # the API may reject undocumented settings keys
+                    body["settings"] = {k: v for k, v in body["settings"].items() if k in ALLOWED_SETTINGS}
+                    print(f"    retrying without undocumented settings {extra}")
+                try:
+                    api("PUT", f"/workflows/{w['id']}", body)
+                except RuntimeError:
+                    print(f"    FAILED, left unchanged: {first}")
+                    failed.append(w["name"])
+                    continue
             after = api("GET", f"/workflows/{w['id']}")
             ok = (after.get("settings") or {}).get("errorWorkflow") == relay and after.get("active") == w.get("active")
             print(f"    verified: errorWorkflow={'ok' if ok else 'MISMATCH'} active={after.get('active')}")
             time.sleep(0.5)
         changed += 1
-    print(f"{changed} workflow(s) {'updated' if apply else 'to update (dry run)'}; backups in {backup}/")
+    print(f"{changed - len(failed)} workflow(s) {'updated' if apply else 'to update (dry run)'}; backups in {backup}/")
+    if failed:
+        print("FAILED (re-run the same command to retry):", ", ".join(failed))
 
 
 if __name__ == "__main__":
