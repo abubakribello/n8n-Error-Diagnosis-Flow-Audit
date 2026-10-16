@@ -131,34 +131,6 @@
    }
   },
   {
-   "id": "d9e395fd-2491-4f63-848f-72f2a39ddd49",
-   "name": "Fallback Slack alert",
-   "type": "n8n-nodes-base.slack",
-   "typeVersion": 2.3,
-   "position": [
-    1000,
-    60
-   ],
-   "parameters": {
-    "authentication": "oAuth2",
-    "select": "channel",
-    "channelId": {
-     "__rl": true,
-     "value": "C097F70UCQ4",
-     "mode": "list",
-     "cachedResultName": "n8n_marketing_runs"
-    },
-    "text": "={{ (() => { const p = $('Extract, fingerprint, dedupe').item.json.payload; const a = $('Extract, fingerprint, dedupe').item.json.action; return `Error in ${p.workflowName} (node: ${p.node})\\n${p.message}\\n${p.description}\\n${p.runUrl || ''}\\n_${a === 'cap' ? 'Daily diagnosis cap reached, not diagnosed.' : 'Diagnosis routine could not be reached.'}_`; })() }}",
-    "otherOptions": {}
-   },
-   "credentials": {
-    "slackOAuth2Api": {
-     "id": "pwRsJWVARd20iV1W",
-     "name": "Slack (working)"
-    }
-   }
-  },
-  {
    "id": "de1ebf91-7ec2-466a-a41e-f376818d6a6b",
    "name": "Skip (already reported today)",
    "type": "n8n-nodes-base.noOp",
@@ -168,6 +140,85 @@
     160
    ],
    "parameters": {}
+  },
+  {
+   "id": "ddf6f8ad-f104-4317-992e-f15d8fc9ef99",
+   "name": "Fallback task in Actions Business",
+   "type": "n8n-nodes-base.notion",
+   "typeVersion": 2.2,
+   "position": [
+    1000,
+    60
+   ],
+   "retryOnFail": true,
+   "maxTries": 3,
+   "waitBetweenTries": 3000,
+   "parameters": {
+    "resource": "databasePage",
+    "databaseId": {
+     "__rl": true,
+     "value": "17db87a2-2ecb-809d-a874-cac800476f67",
+     "mode": "id"
+    },
+    "title": "={{ 'Error in ' + $('Extract, fingerprint, dedupe').item.json.payload.workflowName + ' (not diagnosed)' }}",
+    "propertiesUi": {
+     "propertyValues": [
+      {
+       "key": "Do Date|date",
+       "includeTime": false,
+       "date": "={{ $now }}"
+      },
+      {
+       "key": "Due Date|date",
+       "includeTime": false,
+       "date": "={{ $now }}"
+      },
+      {
+       "key": "Owner|people",
+       "peopleValue": [
+        "218d872b-594c-81f7-a5c1-0002db266243"
+       ]
+      },
+      {
+       "key": "Priority|select",
+       "selectValue": "🔥❗️"
+      }
+     ]
+    },
+    "blockUi": {
+     "blockValues": [
+      {
+       "richText": true,
+       "text": {
+        "text": [
+         {
+          "text": "Link to Error",
+          "isLink": true,
+          "textLink": "={{ $('Extract, fingerprint, dedupe').item.json.payload.runUrl || 'https://jkdxs.app.n8n.cloud/workflow/' + $('Extract, fingerprint, dedupe').item.json.payload.workflowId }}",
+          "annotationUi": {}
+         }
+        ]
+       }
+      },
+      {
+       "textContent": "={{ 'Node: ' + $('Extract, fingerprint, dedupe').item.json.payload.node }}"
+      },
+      {
+       "textContent": "={{ 'Error message: ' + $('Extract, fingerprint, dedupe').item.json.payload.message + ' ' + $('Extract, fingerprint, dedupe').item.json.payload.description }}"
+      },
+      {
+       "textContent": "={{ 'Why no diagnosis: ' + ($('Extract, fingerprint, dedupe').item.json.action === 'cap' ? 'daily diagnosis limit reached (20/day).' : 'the diagnosis routine could not be reached.') + ' Fingerprint: ' + $('Extract, fingerprint, dedupe').item.json.fingerprint }}"
+      }
+     ]
+    },
+    "options": {}
+   },
+   "credentials": {
+    "notionApi": {
+     "id": "Y6dmNj10d5DndjB2",
+     "name": "Notion Abu"
+    }
+   }
   }
  ],
  "connections": {
@@ -204,7 +255,7 @@
     ],
     [
      {
-      "node": "Fallback Slack alert",
+      "node": "Fallback task in Actions Business",
       "type": "main",
       "index": 0
      }
@@ -223,7 +274,7 @@
     [],
     [
      {
-      "node": "Fallback Slack alert",
+      "node": "Fallback task in Actions Business",
       "type": "main",
       "index": 0
      }

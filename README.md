@@ -11,7 +11,7 @@ Two Claude Code routines for the DigitalXShift n8n instance (jkdxs.app.n8n.cloud
 ```
 workflow fails ─► [UTIL] Error Relay (n8n) ─► routine /fire ─► error-diagnosis/SKILL.md ─► Notion task (@you)
                    fingerprint, 24 h dedupe,                    build_context.py (masked)
-                   20 fires/day cap, Slack fallback             notion.py create-task / bump
+                   20 fires/day cap, Notion fallback            notion.py create-task / bump
 
 cron 1st+15th ─► audit routine ─► audit_collect.py ─► audit/SKILL.md ─► Notion "n8n Audit YYYY-MM-DD"
 ```
@@ -22,7 +22,7 @@ Both routines are read-only against n8n. Only Notion is written to.
 
 | Path | What it does |
 |---|---|
-| `n8n/error-relay.workflow.json` | Import into n8n. Error Trigger → fingerprint + dedupe → fire routine, with a Slack fallback |
+| `n8n/error-relay.workflow.json` | Import into n8n. Error Trigger → fingerprint + dedupe → fire routine; anything that can't reach the routine becomes a task in Actions Business |
 | `n8n/relay_code.js` | Source of the relay's Code node (kept in sync with the JSON) |
 | `n8n/set_error_workflow.py` | Points every published workflow's error setting at the relay in one go (dry run by default) |
 | `error-diagnosis/SKILL.md` | What the diagnosis routine does |
@@ -84,7 +84,8 @@ Always follow the SKILL.md from the repo, not from memory.
 1. Import `n8n/error-relay.workflow.json`.
 2. In "Fire diagnosis routine", replace `REPLACE_WITH_ROUTINE_ID`. Create a **Header Auth**
    credential named "Diagnosis routine token": name `Authorization`, value `Bearer <routine API token>`.
-3. Check that "Fallback Slack alert" uses the working Slack credential, then **publish** the
+3. Check that "Fallback task in Actions Business" uses the "Notion Abu" credential and that Owner is
+   you (it reuses the owner of today's error tasks). Then **publish** the
    workflow. Static-data dedupe only persists in production runs.
 
 ### 7. Point workflows at the relay
@@ -104,5 +105,5 @@ Always follow the SKILL.md from the repo, not from memory.
 - Errors only reach the relay from production runs (webhook, trigger, schedule), not from manual test runs.
 - The same fingerprint fires the routine at most once per 24 h. Repeats are counted and reported on the
   next fire, and a repeat after 24 h bumps the open Notion task instead of creating a new one.
-- More than 20 fires in a day go to Slack only, so the routine plan's daily cap isn't exhausted.
-- If the routine can't be reached, the error goes to Slack as a plain alert.
+- More than 20 fires in a day become plain tasks in **Actions Business** (Owner you, priority 🔥❗️), so the routine plan's daily cap isn't exhausted.
+- If the routine can't be reached (after 3 tries), the error also becomes a plain task in Actions Business, with the run link, node and message.
