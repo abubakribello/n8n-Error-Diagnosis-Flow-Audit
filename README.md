@@ -11,7 +11,7 @@ Two Claude Code routines for the DigitalXShift n8n instance (jkdxs.app.n8n.cloud
 
 ```
 workflow fails ─► [UTIL] Error Relay (n8n) ─► routine /fire ─► error-diagnosis/SKILL.md ─► n8n Error Runs page
-                                                                                          + "New n8n error" task in Actions Business (Owner you)
+                                                                                          + "New n8n error" task in Actions Business (Owners: you + Johannes)
                    fingerprint, 24 h dedupe,                    build_context.py (masked)
                    20 fires/day cap, Notion fallback            notion.py create-task / bump
 
@@ -108,9 +108,13 @@ Always follow the SKILL.md from the repo, not from memory.
   firing once the setting points elsewhere.
 
 ## Who gets notified
-The Owner (`NOTION_ASSIGNEE_ID`) and everyone in `NOTION_MENTION_IDS` are @mentioned on every new
-Error Runs page, every "New n8n error" task, every audit report and every relay fallback task.
-Repeats of an open issue only bump its counter, so nobody is notified again.
+- **"New n8n error" task (Actions Business):** you and Johannes are both **Owners** and are @mentioned. It links the Error Runs page.
+- **Error Runs page:** tags nobody and has no Assignee, so there's no duplicate notification. Open it from the task.
+- **Audit report:** both @mentioned.
+- **Relay fallback task (not diagnosed):** both Owners and @mentioned.
+- Repeats of an open issue only bump the counter on the Error Runs page, so nobody is notified again.
+
+`NOTION_ASSIGNEE_ID` plus every id in `NOTION_MENTION_IDS` count as owners.
 
 ## Limits and behaviour
 - Errors only reach the relay from production runs (webhook, trigger, schedule), not from manual test runs.

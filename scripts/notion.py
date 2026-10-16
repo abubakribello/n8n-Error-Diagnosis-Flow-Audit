@@ -3,9 +3,10 @@
 Env: NOTION_TOKEN (internal integration, shared with both databases),
      NOTION_ERRORS_DB (the "n8n Error Runs" database id),
      NOTION_AUDIT_PARENT (page id the audit reports are created under),
-     NOTION_ASSIGNEE_ID (Notion user id set as Owner/Assignee),
-     NOTION_MENTION_IDS (comma-separated Notion user ids @mentioned on every error page,
-       review task and audit report; the assignee is always mentioned too),
+     NOTION_ASSIGNEE_ID (Notion user id; Owner of the review task),
+     NOTION_MENTION_IDS (comma-separated extra Notion user ids; also Owners of the review task
+       and @mentioned there and on audit reports). The Error Runs page itself tags nobody:
+       the review task links to it, so each person gets one notification per new issue.
      NOTION_TASKS_DB (optional: "Actions Business"; each NEW diagnosis also gets a short
        "New n8n error" task there that links the Error Runs page. Existing fields only:
        title, Do Date, Due Date, Owner, Priority. Repeats (bump) create no new task.)
@@ -173,7 +174,6 @@ def paste_ready(node):
 def create_task(path):
     d = json.load(open(path))
     title_key, _ = title_property()
-    assignee = os.environ.get("NOTION_ASSIGNEE_ID")
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     props = {
         title_key: {"title": text(f"[{d['class']}] {d['workflow_name']} → {d['node']}: {d['title']}", 200)},
@@ -190,10 +190,7 @@ def create_task(path):
         "Confidence": {"select": {"name": d["confidence"]}},
         "Diagnosis Status": {"select": {"name": d["status"]}},
     }
-    if assignee:
-        props["Assignee"] = {"people": [{"object": "user", "id": assignee}]}
-    intro = mentions()
-    intro += [{"type": "text", "text": {"content": f"{d['workflow_name']} failed at node \"{d['node']}\". "}}]
+    intro = [{"type": "text", "text": {"content": f"{d['workflow_name']} failed at node \"{d['node']}\". "}}]
     if d.get("run_url"):
         intro += [{"type": "text", "text": {"content": "Open the failed run", "link": {"url": d["run_url"]}}}]
     children = [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": intro}},
@@ -219,15 +216,14 @@ def create_review_task(d, error_page):
     """Short task in Actions Business so the owner gets a Notion notification.
     Writes only properties that already exist there; never changes its schema."""
     tasks_db = notion_id(os.environ["NOTION_TASKS_DB"])
-    owner = os.environ.get("NOTION_ASSIGNEE_ID")
     props_schema = call("GET", f"/databases/{tasks_db}")["properties"]
     title_key = next(k for k, v in props_schema.items() if v["type"] == "title")
     today = datetime.date.today().isoformat()
     props = {title_key: {"title": text(f"New n8n error: {d['workflow_name']} → {d['node']}", 200)}}
     wanted = {"Do Date": {"date": {"start": today}}, "Due Date": {"date": {"start": today}},
               "Priority": {"select": {"name": PRIORITY.get(d["severity"], "1st Priority 🚀")}}}
-    if owner:
-        wanted["Owner"] = {"people": [{"object": "user", "id": owner}]}
+    if mention_ids():
+        wanted["Owner"] = {"people": [{"object": "user", "id": uid} for uid in mention_ids()]}
     props.update({k: v for k, v in wanted.items() if k in props_schema})
     line = mentions() + [{"type": "text", "text": {"content": "review the diagnosis: "}},
              {"type": "mention", "mention": {"page": {"id": error_page["id"]}}}]
