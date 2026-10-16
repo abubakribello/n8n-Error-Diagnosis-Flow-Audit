@@ -91,7 +91,7 @@ def old_error_branch(wf, ex):
             return False
         t = datetime.datetime.fromisoformat(e["startedAt"].replace("Z", "+00:00"))
         return datetime.timedelta(0) <= t - t0 <= datetime.timedelta(minutes=minutes)
-    runs = [e["id"] for e in recent if e.get("mode") == "error" and within(e)]
+    runs = [e["id"] for e in recent if e.get("mode") == "error" and e["id"] != ex["id"] and within(e)]
     return {"has_legacy_error_trigger": True, "fired": bool(runs), "executions": runs,
             "error_workflow_setting": (wf.get("settings") or {}).get("errorWorkflow")}
 
